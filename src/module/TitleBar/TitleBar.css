@@ -1,0 +1,23 @@
+.bar {  
+        margin: 0;
+        padding: 0;
+        height: 35px;
+        width: 100%;
+        border-bottom: 2.5px solid #1A1A1A;
+        border-top-left-radius: 9px;
+        border-top-right-radius: 9px;
+        background: #F5D76E;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        -webkit-app-region: 'drag';
+
+        /*  */
+
+
+        color: #1A1A1A;
+        font-size: 12px;
+        font-style: normal;
+        font-weight: 700;
+        line-height: normal;
+}

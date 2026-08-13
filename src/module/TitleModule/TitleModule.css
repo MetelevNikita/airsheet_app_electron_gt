@@ -1,0 +1,32 @@
+.title_module_container {
+    display: flex;
+    height: auto;
+    align-items: center;
+
+}
+
+.title_module_logo {
+    display: flex;
+    width: 44px;
+    height: 44px;
+}
+
+.title_module_wrapper {
+    margin-left: 10px;
+}
+
+.title_module_wrapper_title {
+    color: #1A1A1A;
+    font-size: 18px;
+    font-style: normal;
+    font-weight: 800;
+    line-height: normal;
+}
+
+.title_module_wrapper_subtitle {
+    color: #6B6B6B;
+    font-size: 11px;
+    font-style: normal;
+    font-weight: 500;
+    line-height: normal;
+}
