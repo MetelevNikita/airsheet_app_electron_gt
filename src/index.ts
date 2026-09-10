@@ -117,9 +117,9 @@ const createWindow = (): void => {
   }
 
   const mainWindow = new BrowserWindow({
-    height: 700,
+    height: 750,
     width: 690,
-    resizable: false,
+    resizable: true,
     maximizable: false,
     fullscreenable: false,
     backgroundColor: '#ffffff',
@@ -139,9 +139,6 @@ const createWindow = (): void => {
 
 
 ipcMain.handle('dialog:select_input_file', async (event, info) => {
-
-  console.log('main process file')
-  console.log('INFO ', info)
 
   const data = await dialog.showOpenDialog({
     properties: ['openFile'],
@@ -166,7 +163,6 @@ ipcMain.handle('dialog:select_input_file', async (event, info) => {
   if (info.titleChannel === 'LA') {
     try {
       const LaData = await InfoDataLA(fileData, data)
-      console.log(LaData)
       return LaData
     } catch (error) {
       throw new Error("Error get file .air LA");
@@ -196,7 +192,6 @@ ipcMain.handle('dialog:select_output_age_folder', async () => {
 
 
 ipcMain.handle('dialog:converting', async (event, data) => {
-  console.log('DATA FROM MAIN ', data)
 
   const getFileInfo = await getFileData(data.input.path)
 
@@ -215,7 +210,7 @@ ipcMain.handle('dialog:converting', async (event, data) => {
 
         if (ageRegExp.test(item)) {
 
-          const match = item.match(ageRegExp)
+          const match = item.match(ageRegExp) as any
           const currentAge = checkAgeGT(match[0])
 
           return `titleObjOn {${currentAge}}\n${item}`
@@ -283,10 +278,37 @@ ipcMain.handle('dialog:converting', async (event, data) => {
 
     const newSheet = getFileInfo.map((item: string, index: number) => {
 
-      if (!item.startsWith("movie")) {
+
+    if (item.startsWith('comment') && getFileInfo[index + 1]?.startsWith('movie')) {
+      return null
+    }
+
+    if (!item.startsWith("movie")) {
+      return item
+    }
+    
+    const findComment = getFileInfo[index-1]
+
+    if (findComment.startsWith('comment')) {
+      const key = item.replace(/^movie\s+(?:<[^>]*>\s+)?[\d:.]+\s+/, '');
+      const isRepeatPart = key === prevMovieKey;
+      prevMovieKey = key;
+
+      if (isRepeatPart) {
+        return item;
+      }
+
+      const regExp = /[\\/](передачи(?:\s*\d{1,2}\+)?)(?=[\\/])/iu;
+
+      if (!regExp.test(item)) {
         return item
       }
 
+      const matchProgram = item.match(regExp)
+      const program = matchProgram?.[1].trim() as string
+      const currentAge = checkAgeLa(program)
+      return `titleObjOn {${currentAge}}\n${getFileInfo[index-1]}\n${item}`
+    } else {
       const key = item.replace(/^movie\s+(?:<[^>]*>\s+)?[\d:.]+\s+/, '');
       const isRepeatPart = key === prevMovieKey;
       prevMovieKey = key;
@@ -305,9 +327,10 @@ ipcMain.handle('dialog:converting', async (event, data) => {
       const program = matchProgram?.[1].trim() as string
       const currentAge = checkAgeLa(program)
       return `titleObjOn {${currentAge}}\n${item}`
+    }
 
  
-    }).join('\n')
+    }).filter(item => item !== null).join('\n')
     
     let num = 0
 
