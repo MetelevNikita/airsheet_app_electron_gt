@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, Menu, dialog, ipcMain, nativeImage } from 'electron';
 
 // 
 
@@ -9,7 +9,30 @@ import iconv from 'iconv-lite'
 
 
 
-async function getFileData(path: string): Promise<any[] | null> {
+function InfoDataGT(fileData: any, data: any): {path: string, length: string} {
+
+  const ageRegExp = /\[\d+\+\]/;
+
+  let result = fileData.filter((item: any) => item.startsWith('movie') && ageRegExp.test(item))
+
+  return {
+    path: data.filePaths[0],
+    length: result.length
+  }
+}
+
+
+function InfoDataLA(fileData: any, data: any): {path: string, length: string} {
+
+  let result = fileData.filter((item: any) => item.startsWith('movie'))
+
+  return {
+    path: data.filePaths[0],
+    length: result.length
+  }
+}
+
+async function getFileData(path: string): Promise<string[] | null> {
   try {
 
     const fileList = await fs.readFile(path)
@@ -33,7 +56,7 @@ async function getFileData(path: string): Promise<any[] | null> {
 }
 
 
-function checkAge(age: string) {
+function checkAgeGT(age: string): string {
 
   switch (age) {
     case '[0+]':
@@ -55,6 +78,19 @@ function checkAge(age: string) {
 }
 
 
+function checkAgeLa(subfolder: string): string {
+  switch (subfolder) {
+    case "передачи":
+      return 'Возраст_12'
+    case "передачи 16+":
+      return 'Возраст_16'
+    default:
+      return 'Возраст_0'
+  }
+  
+}
+
+
 // 
 
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
@@ -65,11 +101,23 @@ if (require('electron-squirrel-startup')) {
   app.quit();
 }
 
+// В dev __dirname === <проект>/.webpack/main, поэтому поднимаемся на два уровня к src/assets.
+// В упакованной сборке иконку ставит electron-forge из packagerConfig.icon, а этот файл
+// может отсутствовать — nativeImage вернёт пустышку, и мы её просто игнорируем.
+const iconPath = path.resolve(__dirname, '../../src/assets/icon.png');
+
 const createWindow = (): void => {
-  // Menu.setApplicationMenu(null);
+  Menu.setApplicationMenu(null);
+
+  if (process.platform === 'darwin' && app.dock) {
+    const dockIcon = nativeImage.createFromPath(iconPath);
+    if (!dockIcon.isEmpty()) {
+      app.dock.setIcon(dockIcon);
+    }
+  }
 
   const mainWindow = new BrowserWindow({
-    height: 600,
+    height: 700,
     width: 690,
     resizable: false,
     maximizable: false,
@@ -77,22 +125,23 @@ const createWindow = (): void => {
     backgroundColor: '#ffffff',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 12, y: 12 },
-    icon: path.join(__dirname, '../src/assets/icon.png'),
+    icon: iconPath,
     webPreferences: {
       preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
     },
   });
 
-
+  // mainWindow.webContents.openDevTools()
   mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
 };
 
 // 
 
 
-ipcMain.handle('dialog:select_input_file', async () => {
+ipcMain.handle('dialog:select_input_file', async (event, info) => {
 
   console.log('main process file')
+  console.log('INFO ', info)
 
   const data = await dialog.showOpenDialog({
     properties: ['openFile'],
@@ -104,14 +153,27 @@ ipcMain.handle('dialog:select_input_file', async () => {
     return
   }
 
-  const ageRegExp = /\[\d+\+\]/;
-
-  let result = fileData.filter((item: any) => item.startsWith('movie') && ageRegExp.test(item))
-
-  return {
-    path: data.filePaths[0],
-    length: result.length
+  if (info.titleChannel === 'GT') {
+    try {
+      const gtData = await InfoDataGT(fileData, data)
+      return gtData
+    } catch (error) {
+      throw new Error("Error get file .air GT");
+    }
   }
+
+
+  if (info.titleChannel === 'LA') {
+    try {
+      const LaData = await InfoDataLA(fileData, data)
+      console.log(LaData)
+      return LaData
+    } catch (error) {
+      throw new Error("Error get file .air LA");
+    }
+  }
+
+  
 
   // return result
 })
@@ -143,70 +205,161 @@ ipcMain.handle('dialog:converting', async (event, data) => {
   }
 
 
-  const ageRegExp = /\[\d+\+\]/;
 
-  const newSheet = getFileInfo.map((item) => {
-    const match = item.match(ageRegExp)
+  if (data.titleChannel === 'GT') {
 
-    if (ageRegExp.test(item)) {
+      const ageRegExp = /\[\d+\+\]/;
 
-      const match = item.match(ageRegExp)
-      const currentAge = checkAge(match[0])
+      const newSheet = getFileInfo.map((item) => {
+        const match = item.match(ageRegExp)
 
-      return `titleObjOn {${currentAge}}\n${item}`
-    } else {
-      return item
-    }
+        if (ageRegExp.test(item)) {
 
-  }).join('\n')
+          const match = item.match(ageRegExp)
+          const currentAge = checkAgeGT(match[0])
 
-  let num = 0
-
-  return await new Promise((resolve, reject) => {
-    const timer = setInterval(async () => {
-
-      if (num == data.input.length) {
-        clearInterval(timer)
-
-          //
-
-          try {
-            
-              const title = path.parse(data.input.path)
-              const name = title.name
-              const ext = title.ext
-
-              const encoded = iconv.encode(newSheet, 'win1251')
-              const endFile = path.join(data.output, `${name}_converted_${Date.now()}${ext}`)
-              
-              await fs.writeFile(endFile, encoded)
-
-          } catch (error: Error | unknown) {
-
-              if (error instanceof Error) {
-                console.error(`Ошибка сохранения нового файла ${error.message}`)
-                throw new Error(`Ошибка сохранения нового файла ${error.message}`);
-              }
-              console.error(error)
-              throw new Error(`Ошибка сохранения нового файла ${error}`);
-          }
-
-
-        const result = {
-          success: true,
-          message: 'Конвертация успешно зщаверешено',
-          data: data.input.length
+          return `titleObjOn {${currentAge}}\n${item}`
+        } else {
+          return item
         }
 
-        resolve(result)
+      }).join('\n')
+
+      let num = 0
+
+      return await new Promise((resolve, reject) => {
+        const timer = setInterval(async () => {
+
+          if (num == data.input.length) {
+            clearInterval(timer)
+
+              //
+
+              try {
+                
+                  const title = path.parse(data.input.path)
+                  const name = title.name
+                  const ext = title.ext
+
+                  const encoded = iconv.encode(newSheet, 'win1251')
+                  const endFile = path.join(data.output, `${name}_converted_${Date.now()}${ext}`)
+                  
+                  await fs.writeFile(endFile, encoded)
+
+              } catch (error: Error | unknown) {
+
+                  if (error instanceof Error) {
+                    console.error(`Ошибка сохранения нового файла ${error.message}`)
+                    throw new Error(`Ошибка сохранения нового файла ${error.message}`);
+                  }
+                  console.error(error)
+                  throw new Error(`Ошибка сохранения нового файла ${error}`);
+              }
+
+
+            const result = {
+              success: true,
+              message: 'Конвертация успешно зщаверешено',
+              data: data.input.length
+            }
+
+            resolve(result)
+          }
+
+          num++
+          event.sender.send('convert:progress', num)
+
+        }, 20);
+
+      })
+
+  }
+
+
+
+  if (data.titleChannel === 'LA') {
+
+    let prevMovieKey = '';
+
+    const newSheet = getFileInfo.map((item: string, index: number) => {
+
+      if (!item.startsWith("movie")) {
+        return item
       }
 
-      num++
-      event.sender.send('convert:progress', num)
+      const key = item.replace(/^movie\s+(?:<[^>]*>\s+)?[\d:.]+\s+/, '');
+      const isRepeatPart = key === prevMovieKey;
+      prevMovieKey = key;
 
-    }, 20);
+      if (isRepeatPart) {
+        return item;
+      }
 
-  })
+      const regExp = /[\\/](передачи(?:\s*\d{1,2}\+)?)(?=[\\/])/iu;
+
+      if (!regExp.test(item)) {
+        return item
+      }
+
+      const matchProgram = item.match(regExp)
+      const program = matchProgram?.[1].trim() as string
+      const currentAge = checkAgeLa(program)
+      return `titleObjOn {${currentAge}}\n${item}`
+
+ 
+    }).join('\n')
+    
+    let num = 0
+
+    return await new Promise((resolve, reject) => {
+      const timer = setInterval(async () => {
+
+        if (num == data.input.length) {
+          clearInterval(timer)
+
+            //
+
+            try {
+              
+                const title = path.parse(data.input.path)
+                const name = title.name
+                const ext = title.ext
+
+                const encoded = iconv.encode(newSheet, 'win1251')
+                const endFile = path.join(data.output, `${name}_converted_${Date.now()}${ext}`)
+                
+                await fs.writeFile(endFile, encoded)
+
+            } catch (error: Error | unknown) {
+
+                if (error instanceof Error) {
+                  console.error(`Ошибка сохранения нового файла ${error.message}`)
+                  throw new Error(`Ошибка сохранения нового файла ${error.message}`);
+                }
+                console.error(error)
+                throw new Error(`Ошибка сохранения нового файла ${error}`);
+            }
+
+
+          const result = {
+            success: true,
+            message: 'Конвертация успешно зщаверешено',
+            data: data.input.length
+          }
+
+          resolve(result)
+        }
+
+        num++
+        event.sender.send('convert:progress', num)
+
+      }, 20);
+
+    })
+  }
+
+
+
 
 
 

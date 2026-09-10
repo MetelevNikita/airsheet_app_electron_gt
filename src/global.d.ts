@@ -3,7 +3,7 @@
 
 
 export interface IElectronAPI {
-  selectInputFile: () => Promise<string>;
+  selectInputFile: (dataFiles: any) => Promise<string>;
   selectOutputFolder: () => Promise<string>;
   selectInputAgeFolder: () => Promise<string>;
   convertFileHandler: (data: any) => Promise<any>;

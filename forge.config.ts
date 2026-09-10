@@ -15,6 +15,11 @@ const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     icon: './src/assets/icon', // Forge сам подставит .ico на Windows и .icns на macOS
+    download: {
+      // zip уже лежит в ~/Library/Caches/electron и проверен при npm install,
+      // а докачка SHASUMS256.txt с github.com вешает сборку
+      unsafelyDisableChecksums: true,
+    },
   },
   rebuildConfig: {},
   makers: [

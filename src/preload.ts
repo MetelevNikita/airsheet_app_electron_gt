@@ -2,8 +2,8 @@ import { contextBridge, ipcRenderer  } from "electron";
 
 
 contextBridge.exposeInMainWorld('electronAPI', {
-    selectInputFile: () => {
-        return ipcRenderer.invoke('dialog:select_input_file')
+    selectInputFile: (dataFiles: {title: string}) => {
+        return ipcRenderer.invoke('dialog:select_input_file', dataFiles)
     },
     selectOutputFolder: () => {
         return ipcRenderer.invoke('dialog:select_output_folder')

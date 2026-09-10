@@ -4,11 +4,13 @@ import React from 'react'
 
 import './TitleBar.css'
 
+// img
+
+import icon from './../../assets/512x512.png'
+
 const TitleBar = () => {
   return (
-    <div className='bar'>
-        <span style={{ fontSize: 20, color: '#080808' }}>airsheet</span>
-    </div>
+    <div className='bar'></div>
   )
 }
 

@@ -6,7 +6,7 @@ import './TitleModule.css'
 
 // 
 
-import brandLogo from './../../assets/BrandLogo.png'
+import brandLogo from './../../assets/512x512.png'
 
 const TitleModule: FC = () => {
   return (
