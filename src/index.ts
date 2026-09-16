@@ -199,8 +199,6 @@ ipcMain.handle('dialog:converting', async (event, data) => {
     return 'Ошибка!'
   }
 
-
-
   if (data.titleChannel === 'GT') {
 
       const ageRegExp = /\[\d+\+\]/;
@@ -273,121 +271,76 @@ ipcMain.handle('dialog:converting', async (event, data) => {
 
 
   if (data.titleChannel === 'LA') {
+    //
 
-    let prevMovieKey = '';
+    const regExp = /(?<=\\)передачи( \d+\+)?(?=\\)/
+    const regExpStandart = /^movie\s+\d{2}:\d{2}:\d{2}\.\d{2,3}/
+
 
     const newSheet = getFileInfo.map((item: string, index: number) => {
 
+        if (item.startsWith('comment')) {
+            if (getFileInfo[index+1].startsWith('movie <00:00:00.00>')) {
+                const movie = getFileInfo[index+1].match(regExp) as any
+                const age = checkAgeLa(movie[0])
+                return `titleObjOn {${age}}\n${item}`
+            } else {
+                return item
+            }
+        } else if (item.match(regExp) && item.match(regExpStandart)) {
+            const match = item.match(regExp) as Array<any>
+            const age = checkAgeLa(match[0])
+            return `titleObjOn {${age}}\n${item}`
+        } else {
+            return item
+        }
 
-    if (item.startsWith('comment') && getFileInfo[index + 1]?.startsWith('movie')) {
-      return null
-    }
+    }).join('\n')
 
-    if (!item.startsWith("movie")) {
-      return item
-    }
-    
-    const findComment = getFileInfo[index-1]
+    // 
 
-    if (findComment.startsWith('comment')) {
-      const key = item.replace(/^movie\s+(?:<[^>]*>\s+)?[\d:.]+\s+/, '');
-      const isRepeatPart = key === prevMovieKey;
-      prevMovieKey = key;
-
-      if (isRepeatPart) {
-        return item;
-      }
-
-      const regExp = /[\\/](передачи(?:\s*\d{1,2}\+)?)(?=[\\/])/iu;
-
-      if (!regExp.test(item)) {
-        return item
-      }
-
-      const matchProgram = item.match(regExp)
-      const program = matchProgram?.[1].trim() as string
-      const currentAge = checkAgeLa(program)
-      return `titleObjOn {${currentAge}}\n${getFileInfo[index-1]}\n${item}`
-    } else {
-      const key = item.replace(/^movie\s+(?:<[^>]*>\s+)?[\d:.]+\s+/, '');
-      const isRepeatPart = key === prevMovieKey;
-      prevMovieKey = key;
-
-      if (isRepeatPart) {
-        return item;
-      }
-
-      const regExp = /[\\/](передачи(?:\s*\d{1,2}\+)?)(?=[\\/])/iu;
-
-      if (!regExp.test(item)) {
-        return item
-      }
-
-      const matchProgram = item.match(regExp)
-      const program = matchProgram?.[1].trim() as string
-      const currentAge = checkAgeLa(program)
-      return `titleObjOn {${currentAge}}\n${item}`
-    }
-
- 
-    }).filter(item => item !== null).join('\n')
-    
-    let num = 0
+    let num = 0;
 
     return await new Promise((resolve, reject) => {
       const timer = setInterval(async () => {
+        if (num === data.input.length) {
+          clearInterval(timer);
 
-        if (num == data.input.length) {
-          clearInterval(timer)
+          try {
+            const title = path.parse(data.input.path);
+            const name = title.name;
+            const ext = title.ext;
 
-            //
+            const encoded = iconv.encode(newSheet, 'win1251');
+            const endFile = path.join(
+              data.output,
+              `${name}_converted_${Date.now()}${ext}`,
+            );
 
-            try {
-              
-                const title = path.parse(data.input.path)
-                const name = title.name
-                const ext = title.ext
+            await fs.writeFile(endFile, encoded);
 
-                const encoded = iconv.encode(newSheet, 'win1251')
-                const endFile = path.join(data.output, `${name}_converted_${Date.now()}${ext}`)
-                
-                await fs.writeFile(endFile, encoded)
+            resolve({
+              success: true,
+              message: 'Конвертация успешно завершена',
+              data: data.input.length,
+            });
+          } catch (error: unknown) {
+            const message =
+              error instanceof Error ? error.message : String(error);
 
-            } catch (error: Error | unknown) {
-
-                if (error instanceof Error) {
-                  console.error(`Ошибка сохранения нового файла ${error.message}`)
-                  throw new Error(`Ошибка сохранения нового файла ${error.message}`);
-                }
-                console.error(error)
-                throw new Error(`Ошибка сохранения нового файла ${error}`);
-            }
-
-
-          const result = {
-            success: true,
-            message: 'Конвертация успешно зщаверешено',
-            data: data.input.length
+            reject(
+              new Error(`Ошибка сохранения нового файла: ${message}`),
+            );
           }
 
-          resolve(result)
+          return;
         }
 
-        num++
-        event.sender.send('convert:progress', num)
-
+        num++;
+        event.sender.send('convert:progress', num);
       }, 20);
-
-    })
+    });
   }
-
-
-
-
-
-
-  
-
 
 })
 
